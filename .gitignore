@@ -1,0 +1,21 @@
+# MATLAB
+*.asv
+*.mat
+*.fig
+*.mex*
+*.p
+*.slx
+*.slxc
+*.autosave
+
+# Generated Data & Experiments
+experiments/
+checkpoints/
+data/
+training_log.txt
+*.png
+*.jpg
+
+# OS
+.DS_Store
+Thumbs.db
