@@ -26,13 +26,13 @@ We utilize a **State-Space** approach using Recurrent Neural Networks to model t
 
 ```mermaid
 graph LR
-    A[Input Audio] --> C{Conditioning}
-    B[Gain Knob] --> C
-    C --> D[GRU Layer 1 (96 Units)]
-    D -->|Fast Transients| E[GRU Layer 2 (48 Units)]
-    E -->|Tube Sag/Memory| F[Dense Shaper]
-    F --> G[ELU Non-Linearity]
-    G --> H[Output Audio]
+    A["Input Audio"] --> C{"Conditioning"}
+    B["Gain Knob"] --> C
+    C --> D["GRU Layer 1 (96 Units)"]
+    D -->|Fast Transients| E["GRU Layer 2 (48 Units)"]
+    E -->|Tube Sag/Memory| F["Dense Shaper"]
+    F --> G["ELU Non-Linearity"]
+    G --> H["Output Audio"]
 ```
 
 ### Key Components
