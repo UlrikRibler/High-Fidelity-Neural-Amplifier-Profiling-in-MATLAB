@@ -1,78 +1,51 @@
 function ModelValidator(net, inputFeatures, targetSignal, fs, outputDir)
-    %% ModelValidator.m
+    %% ModelValidator.m (Gen 4)
     % ---------------------------------------------------------------------
-    % THE JUDGE: PERFORMANCE VISUALIZATION & METRICS
+    % THE JUDGE: 192kHz VISUALIZATION
     % ---------------------------------------------------------------------
     % Description:
-    %   Quantifies the accuracy of the trained neural network.
-    %   Calculates the industry-standard ESR (Error-to-Signal Ratio) and
-    %   generates high-resolution plots of the waveform match.
-    %
-    % Metrics:
-    %   - ESR: < 0.01 is considered "Indistinguishable".
-    %
-    % Inputs:
-    %   inputFeatures: 2 x N Matrix (Audio, Gain)
-    %   targetSignal : 1 x N Matrix (Ground Truth)
+    %   Visualizes the waveform match and the state of all 4 Knobs.
+    %   Validates that the AI follows the Gain/EQ changes correctly.
     %
     % Author: NeuralMat Team
     % ---------------------------------------------------------------------
+
+    disp('Running Gen 4 Validation...');
     
-    disp('Running Validation...');
-    
-    %% 1. INFERENCE
-    % Run the model in "Prediction Mode".
     predictedSignal = predict(net, inputFeatures);
-    
-    %% 2. METRIC CALCULATION
-    % ESR = Sum(Error^2) / Sum(Target^2)
     errorSignal = targetSignal - predictedSignal;
     esr = sum(errorSignal.^2) / sum(targetSignal.^2);
     
-    accuracy = (1-esr)*100;
+    disp(sprintf('Validation ESR: %.5f (Accuracy: %.3f%%)', esr, (1-esr)*100));
     
-    % Log score to console
-    resultStr = sprintf('Validation ESR: %.4f (Accuracy: %.2f%%)', esr, accuracy);
-    disp(resultStr);
+    f = figure('Name', 'Gen 4 Capture Results', 'NumberTitle', 'off', 'Visible', 'off');
     
-    %% 3. VISUALIZATION
-    % Create a rigorous comparison plot (invisible window for background saving)
-    f = figure('Name', 'Conditioned Neural Amp Capture', 'NumberTitle', 'off', 'Visible', 'off');
-    
-    % Extract Audio Component (Row 1) for plotting x-axis
-    inputAudio = inputFeatures(1, :);
-    
-    % PLOT A: Time Domain Zoom
+    % Audio
     subplot(3,1,1);
-    center = round(length(inputAudio)/2);
-    range = center : center + 1000; % Zoom in on 1000 samples (~20ms)
-    
-    plot(range/fs, targetSignal(range), 'b', 'LineWidth', 1.5); hold on;
-    plot(range/fs, predictedSignal(range), 'r--', 'LineWidth', 1.0);
-    legend('Target (Truth)', 'Prediction (Neural)');
-    title(['Stacked GRU Match (ESR: ', num2str(esr, '%.4f'), ')']);
-    ylabel('Amplitude');
+    range = 10000:12000; % Zoom
+    plot(range, targetSignal(range), 'b', 'LineWidth', 1.5); hold on;
+    plot(range, predictedSignal(range), 'r--', 'LineWidth', 1.0);
+    title(['192kHz Waveform Match (ESR: ', num2str(esr, '%.5f'), ')']);
     grid on;
     
-    % PLOT B: Residual Error
+    % Error
     subplot(3,1,2);
-    plot(range/fs, errorSignal(range), 'k');
-    title('Residual Error (Difference)');
-    ylabel('Error Amplitude');
+    plot(range, errorSignal(range), 'k');
+    title('Residual Error (High Res)');
     grid on;
     
-    % PLOT C: Conditioning Context
+    % Knobs
     subplot(3,1,3);
-    gainCurve = inputFeatures(2, range);
-    plot(range/fs, gainCurve, 'm', 'LineWidth', 2);
-    title('Conditioning Input (Virtual Gain Knob)');
-    ylabel('Gain Value');
-    xlabel('Time (s)');
+    % Plot all 4 conditioning signals
+    hold on;
+    plot(inputFeatures(2, range), 'r', 'DisplayName', 'Gain');
+    plot(inputFeatures(3, range), 'g', 'DisplayName', 'Bass');
+    plot(inputFeatures(4, range), 'b', 'DisplayName', 'Mid');
+    plot(inputFeatures(5, range), 'c', 'DisplayName', 'Treble');
+    legend('show');
+    title('Multi-Knob Conditioning State');
     grid on;
     
-    %% 4. ARTIFACT SAVING
-    saveFilename = fullfile(outputDir, 'validation_result.png');
-    saveas(f, saveFilename);
-    disp(['Validation plot saved to: ', saveFilename]);
+    saveas(f, fullfile(outputDir, 'gen4_result.png'));
     close(f);
 end

@@ -1,114 +1,69 @@
 function [net, info] = TrainAmpModel(inputData, targetData, checkpointDir)
-    %% TrainAmpModel.m
+    %% TrainAmpModel.m (Gen 4)
     % ---------------------------------------------------------------------
-    % THE BRAIN: STACKED GRU TRAINING
+    % GENERATION 4: 5-INPUT CONDITIONED TRAINING
     % ---------------------------------------------------------------------
     % Description:
-    %   Defines and trains the Deep Learning architecture.
-    %   Uses a "Conditioned Stacked GRU" topology inspired by NeuralDSP.
+    %   Trains a Stacked GRU to map [Audio, Gain, Bass, Mid, Treble] to Output.
+    %   Optimized for 192kHz data (High VRAM load).
     %
     % Architecture:
-    %   [Input: Audio + Gain] 
-    %        |
-    %   [GRU Layer 1: 96 Units] --> Captures High Freq / Fast Transients
-    %        |
-    %   [GRU Layer 2: 48 Units] --> Captures Low Freq / Power Sag
-    %        |
-    %   [Dense + ELU] ----------> Waveshaping / Soft Clipping
-    %        |
-    %   [Output: Audio]
-    %
-    % Optimizations:
-    %   - GPU Acceleration (Automatic Detection)
-    %   - Multi-threaded Data Prefetching
-    %   - Automatic Checkpoint Resuming
+    %   Input (5) -> GRU(128) -> GRU(64) -> Dense(32) -> ELU -> Output(1)
     %
     % Author: NeuralMat Team
     % ---------------------------------------------------------------------
     
-    disp('Initializing Stacked GRU Architecture (High Performance)...');
+    disp('Initializing Gen 4 Architecture (5-Input GRU)...');
     
-    %% 1. HARDWARE ACCELERATION
+    % GPU Setup
     hasPCT = ~isempty(ver('distcomp'));
     executionEnv = 'auto';
-    if hasPCT
-        try
-            if gpuDeviceCount > 0
-                g = gpuDevice(1);
-                disp(['Targeting GPU: ', g.Name]);
-                reset(g); % Clear VRAM to prevent Out-Of-Memory errors
-                executionEnv = 'gpu';
-            end
-        catch
-            disp('GPU detection failed. Fallback to CPU.');
-        end
-    end
+    if hasPCT, try, if gpuDeviceCount > 0, g=gpuDevice(1); reset(g); executionEnv='gpu'; end; catch, end; end
     
-    %% 2. CHECKPOINT MANAGEMENT
-    % Logic to resume training if the process crashed or was stopped.
+    % Checkpoints
     latestNet = [];
     if ~exist(checkpointDir, 'dir'), mkdir(checkpointDir); end
-    
     files = dir(fullfile(checkpointDir, 'net_checkpoint__*.mat'));
     if ~isempty(files)
         [~, idx] = max([files.datenum]);
-        try
-            d = load(fullfile(checkpointDir, files(idx).name));
-            if isfield(d, 'net')
-                latestNet = d.net; 
-                disp(['RESUMING TRAINING from Checkpoint: ', files(idx).name]); 
-            end
-        catch
-            disp('Warning: Checkpoint found but unreadable. Starting Fresh.');
-        end
+        try, d=load(fullfile(checkpointDir, files(idx).name)); latestNet=d.net; disp('Resuming...'); catch, end
     end
 
-    %% 3. NETWORK DEFINITION
-    % We only define the layers if we are NOT resuming.
+    % Layers
     layers = [];
     if isempty(latestNet)
         layers = [ ...
-            % Input Layer: 2 Channels (Audio, Gain)
-            % 'zscore' normalization ensures inputs are scaled 0-1 for the GRU
-            sequenceInputLayer(2, 'Name', 'Input', 'Normalization', 'zscore')
+            % Input: 5 Channels (Audio, Gain, Bass, Mid, Treble)
+            sequenceInputLayer(5, 'Name', 'Input_FullStack', 'Normalization', 'zscore')
             
-            % Layer 1: High Complexity GRU
-            % 96 Hidden Units allow complex harmonic mapping
-            gruLayer(96, 'OutputMode', 'sequence', 'Name', 'GRU_Fast_Response')
+            % Gen 4: Wider First Layer (128 Units) to handle 192kHz complexity
+            gruLayer(128, 'OutputMode', 'sequence', 'Name', 'GRU_Wideband')
+            gruLayer(64,  'OutputMode', 'sequence', 'Name', 'GRU_Dynamics')
             
-            % Layer 2: Tapered GRU (The "Stack")
-            % 48 Units handles the "slow" dynamics fed by the first layer
-            gruLayer(48, 'OutputMode', 'sequence', 'Name', 'GRU_Slow_Dynamics')
+            fullyConnectedLayer(32, 'Name', 'Shaper')
+            eluLayer('Name', 'NonLin')
             
-            % Shaping Layer
-            % Maps the internal GRU state (48 dims) back to Audio (1 dim)
-            fullyConnectedLayer(32, 'Name', 'Harmonic_Shaper')
-            eluLayer('Name', 'Tube_NonLinearity') % ELU is smoother than ReLU
-            
-            fullyConnectedLayer(1, 'Name', 'Output_Mixer')
-            regressionLayer('Name', 'Audio_Loss')
+            fullyConnectedLayer(1, 'Name', 'Output')
+            regressionLayer('Name', 'Loss')
         ];
     end
 
-    %% 4. HYPERPARAMETERS
-    % Aggressive optimization settings for NVIDIA 4070
+    % Options (Tuned for 192kHz VRAM safety)
     options = trainingOptions('adam', ...
         'ExecutionEnvironment', executionEnv, ...
         'MaxEpochs', 300, ...
-        'MiniBatchSize', 128, ...          % High batch size for GPU efficiency
-        'SequenceLength', 'longest', ...   
+        'MiniBatchSize', 64, ...           % Reduced to 64 for 192kHz (Prevents OOM)
+        'SequenceLength', 'longest', ...
         'InitialLearnRate', 0.005, ...
         'LearnRateSchedule', 'piecewise', ...
-        'LearnRateDropPeriod', 50, ...     % Decays LR every 50 epochs
+        'LearnRateDropPeriod', 50, ...
         'LearnRateDropFactor', 0.5, ...
-        'Shuffle', 'every-epoch', ...      % Essential for generalization
+        'Shuffle', 'every-epoch', ...
         'CheckpointPath', checkpointDir, ...
-        'DispatchInBackground', true, ...  % Uses CPU threads to fetch data while GPU trains
-        'WorkerLoad', 1, ...               % 100% GPU Utilization
+        'DispatchInBackground', true, ...
         'Plots', 'training-progress', ...
         'Verbose', true);
     
-    %% 5. EXECUTION
     try
         if ~isempty(latestNet)
             [net, info] = trainNetwork(inputData, targetData, latestNet, options);

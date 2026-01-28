@@ -1,29 +1,23 @@
 %% AmpCapturePipeline.m
 % -------------------------------------------------------------------------
-% NEURAL AMP CAPTURE: GENERATION 3 (HIGH-FIDELITY PIPELINE)
+% NEURAL AMP CAPTURE: GENERATION 4 (GOD TIER)
 % -------------------------------------------------------------------------
 % Description:
-%   The Master Orchestrator for the NeuralMat project. This script manages
-%   the end-to-end workflow of creating a Deep Learning clone of an audio
-%   device.
+%   The Master Orchestrator for the NeuralMat project.
+%   Manages the 192kHz High-Fidelity pipeline with Full Control Conditioning.
 %
 % Workflow:
-%   1. CONFIGURATION  : Set sample rates, GPU settings, and epochs.
-%   2. DATA GENERATION: Synthesize 3 minutes of "Profiling Audio" (Sweeps,
-%                       Noise, Dynamics) + "Knob Movements".
-%   3. TRAINING       : Train a Stacked GRU network on the GPU using
-%                       Deep Learning Toolbox.
-%   4. LOGGING        : Save all artifacts (Models, Plots, Logs) to a 
-%                       unique, timestamped Session folder.
+%   1. CONFIGURATION  : 192kHz, 5 Inputs, 128-Unit GRU.
+%   2. DATA GENERATION: Synthesize 3 minutes of 192kHz audio + 4 Random Knobs.
+%   3. TRAINING       : Train the 5-Input Network on GPU.
+%   4. LOGGING        : "Black Box" Session recording.
 %
 % Architecture:
-%   - Stacked GRU (96 -> 48 units)
-%   - Conditioned Input (Audio + Gain Control)
-%   - ESR < 0.002 (99.8% Accuracy)
+%   - Stacked GRU (128 -> 64 units)
+%   - 5-Channel Input (Audio, Gain, Bass, Mid, Treble)
 %
 % Requirements:
-%   - Deep Learning Toolbox
-%   - Parallel Computing Toolbox (for GPU)
+%   - NVIDIA GPU (8GB+ VRAM)
 %
 % Author: NeuralMat Team
 % License: MIT
@@ -34,95 +28,62 @@ clc; clear; close all;
 % =========================================================================
 % %% 1. CONFIGURATION
 % =========================================================================
-% Define the hyperparameters for the "Generation 3" model.
-cfg.fs = 48000;              % 48kHz (Pro Audio Standard)
-cfg.duration = 180;          % 3 Minutes of Audio (Ensures State-Space coverage)
-cfg.epochs = 300;            % Training duration (300 ensures convergence)
-cfg.batchSize = 128;         % Optimized for RTX 4070 VRAM saturation
-cfg.architecture = 'Stacked GRU (96->48) + Conditioning';
-cfg.gpu = true;              % Force Hardware Acceleration
+cfg.fs = 192000;             % 192kHz (Mastering Grade - Anti-Aliasing)
+cfg.duration = 180;          % 3 Minutes
+cfg.epochs = 300;
+cfg.batchSize = 64;          % Reduced to 64 to prevent VRAM overflow at 192k
+cfg.architecture = 'Gen 4: 5-Input Stacked GRU (128/64)';
+cfg.gpu = true;
 
-% -------------------------------------------------------------------------
-% Session Management (The "Black Box" Recorder)
-% -------------------------------------------------------------------------
-% Every run creates a unique folder. We never overwrite old experiments.
+% Session Setup
 sessionTimestamp = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
-sessionID = ['Session_', sessionTimestamp];
+sessionID = ['Session_', sessionTimestamp, '_GEN4'];
 baseDir = fullfile('experiments', sessionID);
 
-% Define Artifact Sub-folders
-dirs.checkpoints = fullfile(baseDir, 'checkpoints'); % For resuming crashes
-dirs.data = fullfile(baseDir, 'data');               % For dataset auditing
-dirs.plots = fullfile(baseDir, 'plots');             % For visual proof
-dirs.model = fullfile(baseDir);                      % For final .mat files
+dirs.checkpoints = fullfile(baseDir, 'checkpoints');
+dirs.data = fullfile(baseDir, 'data');
+dirs.plots = fullfile(baseDir, 'plots');
+dirs.model = fullfile(baseDir);
 
-% Create Directory Structure
-mkdir(dirs.checkpoints);
-mkdir(dirs.data);
-mkdir(dirs.plots);
+mkdir(dirs.checkpoints); mkdir(dirs.data); mkdir(dirs.plots);
 
-% Start Logging Console Output to Text File
 logFile = fullfile(baseDir, 'training_log.txt');
-diary(logFile); 
+diary(logFile);
 
-disp('================================================================');
-disp(['   NEURAL AMP CAPTURE: SESSION ', sessionTimestamp]);
-disp('================================================================');
-disp(['Output Directory: ', baseDir]);
+disp('================================================');
+disp(['   NEURAL AMP CAPTURE: GENERATION 4 (GOD TIER)']);
+disp(['   Sample Rate: 192kHz | Inputs: 5 (Full Stack)']);
+disp('================================================');
 
-% Save Configuration Metadata
 cfgFile = fullfile(baseDir, 'config.mat');
 save(cfgFile, 'cfg');
-disp('Configuration saved.');
 
 try
-    % =====================================================================
-    % %% 2. DATASET GENERATION (The Exciter)
-    % =====================================================================
-    % We generate synthetic signals designed to expose the non-linearities
-    % of the target amp. This includes Log Sine Sweeps and 1/f Pink Noise.
-    disp('[Step 1] Generating "Massive" Segmented Dataset...');
+    %% 1. Generate Datasets
+    disp('[Step 1] Generating 192kHz Multi-Knob Dataset...');
     [trainInput, trainTarget] = DataGenerator(cfg.fs, cfg.duration);
     
-    % SAVE THE DATA ARTIFACTS
-    % Crucial for reproducibility. We save the exact audio used for training.
-    disp('Saving Training Data Artifacts (State-Space Snapshot)...');
+    disp('Saving Massive Data Artifacts (1GB+)...');
     dataFile = fullfile(dirs.data, 'dataset.mat');
-    save(dataFile, 'trainInput', 'trainTarget', '-v7.3'); 
-    disp(['Data saved to: ', dataFile]);
+    save(dataFile, 'trainInput', 'trainTarget', '-v7.3'); % v7.3 required for >2GB
 
-    % =====================================================================
-    % %% 3. DEEP LEARNING (The Brain)
-    % =====================================================================
-    % Train the Stacked GRU network. 
-    % Note: The function handles GPU offloading and checkpointing automatically.
-    disp(['[Step 2] Training Network (', num2str(cfg.epochs), ' Epochs)...']);
-    
+    %% 2. Train Neural Network
+    disp('[Step 2] Training Gen 4 Network...');
     [net, trainInfo] = TrainAmpModel(trainInput, trainTarget, dirs.checkpoints);
 
-    % Save Final Trained Model
     modelFile = fullfile(dirs.model, 'final_model.mat');
     save(modelFile, 'net', 'trainInfo');
-    disp(['Final Model saved to: ', modelFile]);
 
-    % =====================================================================
-    % %% 4. VALIDATION (The Judge)
-    % =====================================================================
-    % We pick a random segment from the dataset and compare the Neural 
-    % Prediction against the Ground Truth (Virtual Amp).
-    disp('[Step 3] Validating Model...');
-    
-    idx = randi(length(trainInput)); % Random sample
+    %% 3. Validation
+    disp('[Step 3] Validating Gen 4 Model...');
+    idx = randi(length(trainInput));
     ModelValidator(net, trainInput{idx}, trainTarget{idx}, cfg.fs, dirs.plots);
 
-    disp('SESSION COMPLETED SUCCESSFULLY.');
+    disp('GEN 4 CAPTURE COMPLETE.');
 
 catch ME
-    disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-    disp('CRITICAL FAILURE DURING SESSION');
+    disp('CRITICAL FAILURE');
     disp(ME.message);
     disp(ME.stack(1));
-    disp('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
 end
-
-diary off; % Stop logging
+diary off;
