@@ -51,7 +51,7 @@ graph LR
 
 ### Installation
 ```bash
-git clone https://github.com/your-username/neural-mat-capture.git
+git clone https://github.com/UlrikRibler/neural-mat-capture.git
 cd neural-mat-capture
 ```
 
