@@ -1,21 +1,33 @@
-# MATLAB
-*.asv
-*.mat
-*.fig
-*.mex*
-*.p
-*.slx
-*.slxc
-*.autosave
+# Build output
+build/
+out/
+.vs/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
 
-# Generated Data & Experiments
+# Generated experiments and artifacts
 experiments/
 checkpoints/
 data/
+*.bin
+*.json.tmp
 training_log.txt
-*.png
-*.jpg
 
-# OS
+# MSVC / Windows binaries
+*.obj
+*.ilk
+*.pdb
+*.exe
+*.lib
+*.dll
+*.exp
+
+# OS / editor
 .DS_Store
 Thumbs.db
+*.user
+*.suo
+*.swp

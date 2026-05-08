@@ -1,91 +1,137 @@
-# NeuralMatlab 🎸 (Gen 4)
-### High-Fidelity "God Tier" Neural Amplifier Profiling
+# NeuralAmp C++
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![MATLAB](https://img.shields.io/badge/Made%20with-MATLAB-orange.svg)](https://www.mathworks.com/products/matlab.html)
-[![Quality](https://img.shields.io/badge/Audio-192kHz-blue.svg)]()
-[![Controls](https://img.shields.io/badge/Conditioning-Full%20Tone%20Stack-purple.svg)]()
+NeuralAmp C++ is an experimental neural amplifier profiling tool. It generates
+synthetic amp-capture data, trains a recurrent neural network to imitate a
+virtual tube amplifier, and writes checkpoint/model artifacts from a command-line
+workflow.
 
-**NeuralMatlab** is an open-source, research-grade framework for cloning analog audio equipment using Deep Learning.
+The project is written in C++20 and implements the training stack directly. It
+does not use LibTorch, TensorFlow, ONNX Runtime, MATLAB, or any other machine
+learning framework.
 
-**Generation 4** represents the pinnacle of this research. It moves beyond simple "snapshot" capturing to full **Virtual Analog Simulation**. The AI learns not just the sound, but the entire control surface of the amplifier.
+## Core Idea
 
----
+The model learns a conditioned audio mapping:
 
-## 🚀 The Gen 4 Upgrade
-
-We have moved from "Indistinguishable" to "Mastering Grade".
-
-*   **192kHz Sample Rate:** Zero aliasing. The Nyquist limit is pushed to 96kHz, far beyond human hearing, ensuring the smoothest possible distortion harmonics.
-*   **Full Tone Stack:** The model now learns **Gain, Bass, Mid, and Treble**. You can effectively "turn the knobs" on the neural network.
-*   **5-Dimensional Input:** The GRU receives `[Audio, Gain, Bass, Mid, Treble]` simultaneously, learning the complex interactions between drive and EQ.
-
-## 🧠 The Architecture
-
-```mermaid
-graph LR
-    A["Input Audio"] --> M{Mixer}
-    K1["Gain Knob"] --> M
-    K2["Bass Knob"] --> M
-    K3["Mid Knob"] --> M
-    K4["Treble Knob"] --> M
-    
-    M --> D["GRU Layer 1 (128 Units)"]
-    D -->|Wideband Harmonics| E["GRU Layer 2 (64 Units)"]
-    E -->|Dynamics & Sag| F["Dense Shaper"]
-    F --> G["ELU Non-Linearity"]
-    G --> H["Output Audio (192kHz)"]
+```text
+[audio, band_01, band_02, ..., band_20] -> amplifier output
 ```
 
-### Key Components
-*   **Wideband GRU:** The first layer has been expanded to **128 Units** to handle the massive information density of 192kHz audio.
-*   **Random Walk Conditioning:** During training, all 4 knobs are turned randomly and independently. This forces the AI to disentangle "Bass frequency" from "Input Gain", creating a truly separable control set.
+The first channel is the input audio. The next 20 channels are sweep controls
+for logarithmically spaced frequency bands from 40 Hz to 20 kHz. During dataset
+generation, the sweep emphasizes adjacent bands over time with a small
+deterministic dither, giving the network explicit coverage across the whole
+frequency range.
 
-## 🛠️ Getting Started
+The virtual target amp applies:
 
-### Prerequisites
-*   MATLAB R2023a or newer.
-*   **Deep Learning Toolbox**
-*   **Parallel Computing Toolbox** (Mandatory for Gen 4).
-*   **High-End GPU:** NVIDIA RTX 3070/4070 (8GB VRAM) or better. *Note: 192kHz training is VRAM heavy.*
+- asymmetric tanh preamp saturation;
+- DC blocking;
+- a 20-band parallel tone/sweep filter bank;
+- power-amp soft clipping;
+- cabinet low-pass filtering.
 
-### Installation
-```bash
-git clone https://github.com/UlrikRibler/neural-mat-capture.git
-cd neural-mat-capture
+The neural model is:
+
+```text
+Sequence input -> GRU -> GRU -> Dense -> ELU -> Dense output
 ```
 
-### Usage
-Run the master pipeline:
-```matlab
-AmpCapturePipeline
+## Build Requirements
+
+- CMake 3.24 or newer.
+- MSVC 2022 Build Tools on Windows. MSVC 2019 also works with the current code.
+- Internet access on first configure so CMake can fetch:
+  - Eigen 3.4 for matrix math;
+  - nlohmann/json 3.11 for config metadata.
+
+Build and test from the repository root:
+
+```powershell
+cmake -S . -B build -G "Visual Studio 17 2022"
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
 ```
 
-**What happens next?**
-1.  **Generation:** Creates 180 seconds of 192kHz audio with random knob twiddling. (~1.5GB Dataset).
-2.  **Training:** Slices the audio into ~2,500 segments and trains on your GPU (Batch Size 64).
-3.  **Result:** A `.mat` file containing a neural network that acts exactly like a 4-knob tube amp.
+If CMake selects another Visual Studio generator automatically, use the generated
+path for the executable.
 
-## 📊 Performance
+## Run The Pipeline
 
-| Metric | Gen 3 (Standard) | Gen 4 (God Tier) |
-| :--- | :--- | :--- |
-| **Sample Rate** | 48kHz | **192kHz** |
-| **Controls** | Gain Only | **Gain + 3-Band EQ** |
-| **Network Size** | 96/48 GRU | **128/64 GRU** |
-| **Aliasing** | Minimal | **None (Measurable)** |
+Run the default quick pipeline:
 
-## 📂 Project Structure
+```powershell
+.\build\Release\neural_amp.exe run --preset quick
+```
 
-*   `AmpCapturePipeline.m`: **Gen 4 Orchestrator**. 192kHz logic.
-*   `TrainAmpModel.m`: **The Brain**. 5-Input architecture definition.
-*   `DataGenerator.m`: **The 5-D Exciter**. Generates random walks for 4 knobs.
-*   `VirtualTubeAmp.m`: **The Target**. Simulates a Tube Preamp + 3-Band Parametric EQ.
-*   `ModelValidator.m`: **The Judge**. High-res visualization.
+Run a short smoke test:
 
-## 📄 License
+```powershell
+.\build\Release\neural_amp.exe run --preset quick --duration 1 --epochs 1 --bands 20
+```
 
-MIT License. See [LICENSE](LICENSE).
+Generate a dataset without training:
 
----
-*Built with pure MATLAB and Caffeine.* ☕
+```powershell
+.\build\Release\neural_amp.exe generate --preset quick --output experiments\quick_data --bands 20
+```
+
+Train from an existing dataset:
+
+```powershell
+.\build\Release\neural_amp.exe train --dataset experiments\quick_data --output experiments\quick_train --preset quick
+```
+
+Validate a saved model:
+
+```powershell
+.\build\Release\neural_amp.exe validate --model experiments\quick_train\final_model.bin --dataset experiments\quick_data
+```
+
+Inspect a checkpoint:
+
+```powershell
+.\build\Release\neural_amp.exe inspect --checkpoint experiments\quick_train\checkpoints\checkpoint_epoch_0001.bin
+```
+
+## Presets
+
+| Preset | Sample rate | Duration | Input | Model | Purpose |
+| --- | ---: | ---: | --- | --- | --- |
+| `quick` | 48 kHz | 2 seconds | audio + 20 bands | GRU 8/4, dense 8 | Fast local verification |
+| `gen4-full` | 192 kHz | 180 seconds | audio + 20 bands | GRU 128/64, dense 32 | Full research-style run |
+
+`gen4-full` is CPU-only. It preserves the high-resolution research target, but
+it can be very slow compared with framework-backed GPU training.
+
+## Outputs
+
+Runs write to `experiments/<session>/` unless `--output` is supplied.
+
+- `config.json`: resolved preset and CLI settings.
+- `dataset.bin`: chunked binary training data.
+- `dataset.json`: dataset metadata including band count and input channels.
+- `checkpoints/checkpoint_epoch_XXXX.bin`: model weights plus Adam state.
+- `final_model.bin`: inference-ready model weights and normalization stats.
+
+Validation is console-only and prints ESR plus an accuracy percentage.
+
+## Project Layout
+
+- `src/Dataset.*`: chirp/noise generation, 20-band sweep controls, chunking.
+- `src/VirtualTubeAmp.*`: virtual amp target and 20-band filter bank.
+- `src/Model.*`: GRU, dense layers, forward pass, backpropagation.
+- `src/Trainer.*`: normalization, truncated BPTT, Adam, checkpointing.
+- `src/Pipeline.*`: orchestration for generate, train, run, and validate.
+- `src/Artifacts.*`: binary model/checkpoint serialization.
+- `tests/test_core.cpp`: CTest unit coverage and gradient sanity checks.
+
+## Current Scope
+
+This is an offline research/training tool, not a realtime audio plugin. The v1
+runtime is CPU-only and optimized for correctness, reproducibility, and a clear
+C++ implementation rather than maximum training speed.
+
+## License
+
+MIT License. See `LICENSE`.
