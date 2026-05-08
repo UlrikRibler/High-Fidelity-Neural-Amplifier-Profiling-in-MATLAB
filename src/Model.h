@@ -53,6 +53,12 @@ private:
 
     Eigen::VectorXf forwardStep(const Eigen::VectorXf& x, const Eigen::VectorXf& hPrev,
                                 StepCache& cache) const;
+    void forwardInference(const Eigen::Ref<const Eigen::VectorXf>& x,
+                          Eigen::VectorXf& h,
+                          Eigen::VectorXf& z,
+                          Eigen::VectorXf& r,
+                          Eigen::VectorXf& n,
+                          Eigen::VectorXf& scratch) const;
     void backwardStep(const StepCache& cache, const Eigen::VectorXf& dh,
                       Eigen::VectorXf& dx, Eigen::VectorXf& dhPrev);
 
@@ -90,6 +96,27 @@ struct TrainWindowResult {
     Eigen::VectorXf h2Final;
 };
 
+struct InferenceState {
+    Eigen::VectorXf h1;
+    Eigen::VectorXf h2;
+    Eigen::VectorXf xNorm;
+    Eigen::VectorXf z1;
+    Eigen::VectorXf r1;
+    Eigen::VectorXf n1;
+    Eigen::VectorXf scratch1;
+    Eigen::VectorXf z2;
+    Eigen::VectorXf r2;
+    Eigen::VectorXf n2;
+    Eigen::VectorXf scratch2;
+    Eigen::VectorXf densePre;
+    Eigen::VectorXf denseAct;
+
+    InferenceState() = default;
+    explicit InferenceState(const ModelConfig& cfg);
+    void resize(const ModelConfig& cfg);
+    void reset();
+};
+
 class NeuralNet {
 public:
     NeuralNet();
@@ -103,6 +130,9 @@ public:
     const Eigen::VectorXf& normalizationMean() const { return normMean_; }
     const Eigen::VectorXf& normalizationStd() const { return normStd_; }
 
+    InferenceState makeInferenceState() const;
+    float predictSample(const Eigen::Ref<const Eigen::VectorXf>& input,
+                        InferenceState& state) const;
     Eigen::RowVectorXf predict(const Eigen::MatrixXf& input) const;
     TrainWindowResult accumulateGradients(const Eigen::MatrixXf& input,
                                           const Eigen::RowVectorXf& target,

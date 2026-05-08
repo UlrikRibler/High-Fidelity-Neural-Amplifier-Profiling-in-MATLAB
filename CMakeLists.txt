@@ -32,6 +32,7 @@ FetchContent_MakeAvailable(nlohmann_json)
 
 add_library(neural_amp_core
   src/Artifacts.cpp
+  src/Benchmark.cpp
   src/Config.cpp
   src/Dataset.cpp
   src/Dsp.cpp

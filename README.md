@@ -9,6 +9,10 @@ The project is written in C++20 and implements the training stack directly. It
 does not use LibTorch, TensorFlow, ONNX Runtime, MATLAB, or any other machine
 learning framework.
 
+The runtime now includes a reusable streaming inference state for low-latency
+single-sample prediction. This is the path to use when embedding the model in a
+larger realtime system.
+
 ## Core Idea
 
 The model learns a conditioned audio mapping:
@@ -88,6 +92,12 @@ Validate a saved model:
 .\build\Release\neural_amp.exe validate --model experiments\quick_train\final_model.bin --dataset experiments\quick_data
 ```
 
+Benchmark streaming inference latency:
+
+```powershell
+.\build\Release\neural_amp.exe benchmark --model experiments\quick_train\final_model.bin --samples 10000 --warmup 1000
+```
+
 Inspect a checkpoint:
 
 ```powershell
@@ -116,11 +126,16 @@ Runs write to `experiments/<session>/` unless `--output` is supplied.
 
 Validation is console-only and prints ESR plus an accuracy percentage.
 
+The benchmark command prints mean, p50, p95, p99, max latency, throughput, and a
+checksum. It uses the allocation-aware streaming inference path with persistent
+GRU state.
+
 ## Project Layout
 
 - `src/Dataset.*`: chirp/noise generation, 20-band sweep controls, chunking.
 - `src/VirtualTubeAmp.*`: virtual amp target and 20-band filter bank.
 - `src/Model.*`: GRU, dense layers, forward pass, backpropagation.
+- `src/Benchmark.*`: streaming inference latency measurement.
 - `src/Trainer.*`: normalization, truncated BPTT, Adam, checkpointing.
 - `src/Pipeline.*`: orchestration for generate, train, run, and validate.
 - `src/Artifacts.*`: binary model/checkpoint serialization.
@@ -128,9 +143,12 @@ Validation is console-only and prints ESR plus an accuracy percentage.
 
 ## Current Scope
 
-This is an offline research/training tool, not a realtime audio plugin. The v1
-runtime is CPU-only and optimized for correctness, reproducibility, and a clear
-C++ implementation rather than maximum training speed.
+This is an offline research/training tool with a low-latency inference path. It
+is not a trading strategy, execution engine, risk system, or financial advice.
+If this technology is later adapted for market data, keep the model interface
+separate from order routing, risk limits, audit logging, simulation, and live
+execution controls. Latency should be measured in the target deployment process,
+on the target hardware, with production-like input rates.
 
 ## License
 

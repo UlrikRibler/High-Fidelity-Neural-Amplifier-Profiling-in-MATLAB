@@ -1,4 +1,5 @@
 #include "Artifacts.h"
+#include "Benchmark.h"
 #include "Dataset.h"
 #include "Dsp.h"
 #include "Trainer.h"
@@ -77,6 +78,38 @@ void testGruForwardDimensions() {
     require(output.size() == 6, "prediction length mismatch");
 }
 
+void testStreamingPredictionMatchesBatch() {
+    ModelConfig cfg;
+    cfg.inputSize = 21;
+    cfg.hidden1 = 3;
+    cfg.hidden2 = 2;
+    cfg.dense = 4;
+    NeuralNet net(cfg, 8);
+    Eigen::MatrixXf input = Eigen::MatrixXf::Random(21, 8);
+    const Eigen::RowVectorXf batch = net.predict(input);
+    InferenceState state = net.makeInferenceState();
+    for (int i = 0; i < input.cols(); ++i) {
+        const float streaming = net.predictSample(input.col(i), state);
+        require(std::abs(streaming - batch(i)) < 1.0e-6f, "streaming prediction mismatch");
+    }
+}
+
+void testBenchmarkRuns() {
+    ModelConfig cfg;
+    cfg.inputSize = 21;
+    cfg.hidden1 = 3;
+    cfg.hidden2 = 2;
+    cfg.dense = 4;
+    NeuralNet net(cfg, 12);
+    BenchmarkOptions options;
+    options.samples = 16;
+    options.warmupSamples = 4;
+    const BenchmarkResult result = benchmarkStreamingInference(net, options);
+    require(result.samples == options.samples, "benchmark sample count mismatch");
+    require(std::isfinite(result.meanMicroseconds), "benchmark mean is not finite");
+    require(std::isfinite(result.checksum), "benchmark checksum is not finite");
+}
+
 void testGradientSanity() {
     ModelConfig cfg;
     cfg.inputSize = 21;
@@ -131,6 +164,8 @@ int main() {
     testDatasetShape();
     testVirtualAmpFiniteNormalized();
     testGruForwardDimensions();
+    testStreamingPredictionMatchesBatch();
+    testBenchmarkRuns();
     testGradientSanity();
     testCheckpointRoundTrip();
     std::cout << "All neural_amp core tests passed.\n";

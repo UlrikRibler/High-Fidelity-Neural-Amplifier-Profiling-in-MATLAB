@@ -1,4 +1,5 @@
 #include "Artifacts.h"
+#include "Benchmark.h"
 #include "Config.h"
 #include "Pipeline.h"
 
@@ -27,6 +28,7 @@ void printHelp() {
         << "  train --dataset <path> --output experiments/<session> [--preset quick]\n"
         << "  validate --model <path> --dataset <path>\n"
         << "  inspect --checkpoint <path>\n\n"
+        << "  benchmark --model <path> [--samples 10000] [--warmup 1000]\n\n"
         << "Presets: quick, gen4-full\n";
 }
 
@@ -88,6 +90,14 @@ std::filesystem::path defaultOutput(const ParsedArgs& args) {
     return std::filesystem::path("experiments") / neural_amp::timestampedSessionName();
 }
 
+std::size_t sizeOption(const ParsedArgs& args, const std::string& key, std::size_t fallback) {
+    const auto it = args.options.find(key);
+    if (it == args.options.end()) {
+        return fallback;
+    }
+    return static_cast<std::size_t>(std::stoull(it->second));
+}
+
 Config configForTrain(const ParsedArgs& args, const std::filesystem::path& datasetPath,
                       const std::filesystem::path& outputDir) {
     const auto explicitPreset = args.options.find("--preset");
@@ -144,6 +154,28 @@ int main(int argc, char** argv) {
 
         if (args.command == "inspect") {
             std::cout << neural_amp::inspectCheckpoint(requiredPath(args, "--checkpoint")) << '\n';
+            return 0;
+        }
+
+        if (args.command == "benchmark") {
+            neural_amp::BenchmarkOptions options;
+            options.samples = sizeOption(args, "--samples", options.samples);
+            options.warmupSamples = sizeOption(args, "--warmup", options.warmupSamples);
+            if (args.options.contains("--seed")) {
+                options.seed = static_cast<std::uint32_t>(std::stoul(args.options.at("--seed")));
+            }
+
+            const neural_amp::NeuralNet net = neural_amp::loadModel(requiredPath(args, "--model"));
+            const neural_amp::BenchmarkResult result =
+                neural_amp::benchmarkStreamingInference(net, options);
+            std::cout << "Streaming inference latency (" << result.samples << " samples)\n";
+            std::cout << "mean: " << result.meanMicroseconds << " us\n";
+            std::cout << "p50 : " << result.p50Microseconds << " us\n";
+            std::cout << "p95 : " << result.p95Microseconds << " us\n";
+            std::cout << "p99 : " << result.p99Microseconds << " us\n";
+            std::cout << "max : " << result.maxMicroseconds << " us\n";
+            std::cout << "throughput: " << result.samplesPerSecond << " samples/s\n";
+            std::cout << "checksum: " << result.checksum << '\n';
             return 0;
         }
 

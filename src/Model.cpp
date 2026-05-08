@@ -128,6 +128,32 @@ void GRULayer::backwardStep(const StepCache& cache, const Eigen::VectorXf& dh,
     dhPrev = dhPrevTotal;
 }
 
+void GRULayer::forwardInference(const Eigen::Ref<const Eigen::VectorXf>& x,
+                                Eigen::VectorXf& h,
+                                Eigen::VectorXf& z,
+                                Eigen::VectorXf& r,
+                                Eigen::VectorXf& n,
+                                Eigen::VectorXf& scratch) const {
+    z.noalias() = wz_.value * x;
+    z.noalias() += uz_.value * h;
+    z += bz_.value.col(0);
+    z = (1.0f + (-z.array()).exp()).inverse().matrix();
+
+    r.noalias() = wr_.value * x;
+    r.noalias() += ur_.value * h;
+    r += br_.value.col(0);
+    r = (1.0f + (-r.array()).exp()).inverse().matrix();
+
+    scratch = (r.array() * h.array()).matrix();
+    n.noalias() = wn_.value * x;
+    n.noalias() += un_.value * scratch;
+    n += bn_.value.col(0);
+    n = n.array().tanh();
+
+    scratch = ((1.0f - z.array()) * n.array() + z.array() * h.array()).matrix();
+    h.swap(scratch);
+}
+
 DenseLayer::DenseLayer(int inputSize, int outputSize, std::mt19937& rng) {
     initParam(w_, outputSize, inputSize, rng, xavierLimit(inputSize, outputSize));
     b_ = Param(outputSize, 1);
@@ -139,6 +165,42 @@ std::vector<Param*> DenseLayer::parameters() {
 
 std::vector<const Param*> DenseLayer::parameters() const {
     return {&w_, &b_};
+}
+
+InferenceState::InferenceState(const ModelConfig& cfg) {
+    resize(cfg);
+}
+
+void InferenceState::resize(const ModelConfig& cfg) {
+    h1 = Eigen::VectorXf::Zero(cfg.hidden1);
+    h2 = Eigen::VectorXf::Zero(cfg.hidden2);
+    xNorm = Eigen::VectorXf::Zero(cfg.inputSize);
+    z1 = Eigen::VectorXf::Zero(cfg.hidden1);
+    r1 = Eigen::VectorXf::Zero(cfg.hidden1);
+    n1 = Eigen::VectorXf::Zero(cfg.hidden1);
+    scratch1 = Eigen::VectorXf::Zero(cfg.hidden1);
+    z2 = Eigen::VectorXf::Zero(cfg.hidden2);
+    r2 = Eigen::VectorXf::Zero(cfg.hidden2);
+    n2 = Eigen::VectorXf::Zero(cfg.hidden2);
+    scratch2 = Eigen::VectorXf::Zero(cfg.hidden2);
+    densePre = Eigen::VectorXf::Zero(cfg.dense);
+    denseAct = Eigen::VectorXf::Zero(cfg.dense);
+}
+
+void InferenceState::reset() {
+    h1.setZero();
+    h2.setZero();
+    xNorm.setZero();
+    z1.setZero();
+    r1.setZero();
+    n1.setZero();
+    scratch1.setZero();
+    z2.setZero();
+    r2.setZero();
+    n2.setZero();
+    scratch2.setZero();
+    densePre.setZero();
+    denseAct.setZero();
 }
 
 NeuralNet::NeuralNet() : NeuralNet(ModelConfig{}, 1) {}
@@ -186,21 +248,41 @@ Eigen::VectorXf NeuralNet::normalizeInputColumn(const Eigen::MatrixXf& input, in
     return ((input.col(column) - normMean_).array() / normStd_.array()).matrix();
 }
 
+InferenceState NeuralNet::makeInferenceState() const {
+    return InferenceState(cfg_);
+}
+
+float NeuralNet::predictSample(const Eigen::Ref<const Eigen::VectorXf>& input,
+                               InferenceState& state) const {
+    if (input.size() != cfg_.inputSize) {
+        throw std::runtime_error("predict sample input channel count does not match model");
+    }
+    if (state.xNorm.size() != cfg_.inputSize || state.h1.size() != cfg_.hidden1 ||
+        state.h2.size() != cfg_.hidden2 || state.densePre.size() != cfg_.dense) {
+        state.resize(cfg_);
+    }
+
+    state.xNorm = ((input - normMean_).array() / normStd_.array()).matrix();
+    gru1_.forwardInference(state.xNorm, state.h1, state.z1, state.r1, state.n1, state.scratch1);
+    gru2_.forwardInference(state.h1, state.h2, state.z2, state.r2, state.n2, state.scratch2);
+
+    state.densePre.noalias() = shaper_.w_.value * state.h2;
+    state.densePre += shaper_.b_.value.col(0);
+    state.denseAct =
+        (state.densePre.array() > 0.0f)
+            .select(state.densePre.array(), state.densePre.array().exp() - 1.0f)
+            .matrix();
+    return (output_.w_.value * state.denseAct + output_.b_.value.col(0))(0);
+}
+
 Eigen::RowVectorXf NeuralNet::predict(const Eigen::MatrixXf& input) const {
     if (input.rows() != cfg_.inputSize) {
         throw std::runtime_error("predict input channel count does not match model");
     }
     Eigen::RowVectorXf prediction(input.cols());
-    Eigen::VectorXf h1 = Eigen::VectorXf::Zero(cfg_.hidden1);
-    Eigen::VectorXf h2 = Eigen::VectorXf::Zero(cfg_.hidden2);
+    InferenceState state = makeInferenceState();
     for (int t = 0; t < input.cols(); ++t) {
-        GRULayer::StepCache c1;
-        GRULayer::StepCache c2;
-        h1 = gru1_.forwardStep(normalizeInputColumn(input, t), h1, c1);
-        h2 = gru2_.forwardStep(h1, h2, c2);
-        const Eigen::VectorXf pre = shaper_.w_.value * h2 + shaper_.b_.value.col(0);
-        const Eigen::VectorXf shaped = elu(pre);
-        prediction(t) = (output_.w_.value * shaped + output_.b_.value.col(0))(0);
+        prediction(t) = predictSample(input.col(t), state);
     }
     return prediction;
 }
