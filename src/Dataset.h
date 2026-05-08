@@ -7,10 +7,10 @@
 #include <filesystem>
 #include <vector>
 
-namespace neural_amp {
+namespace stock_signal {
 
 struct Sequence {
-    Eigen::MatrixXf input;     // channels x time, where channels = audio + bands
+    Eigen::MatrixXf input;     // channels x time, where channels = waveform + bands
     Eigen::RowVectorXf target; // 1 x time
 };
 
@@ -29,4 +29,4 @@ void saveDataset(const std::filesystem::path& outputDir, const Dataset& dataset)
 Dataset loadDataset(const std::filesystem::path& datasetPath);
 std::filesystem::path resolveDatasetBin(const std::filesystem::path& datasetPath);
 
-} // namespace neural_amp
+} // namespace stock_signal

@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <string>
 
-namespace neural_amp {
+namespace stock_signal {
 
 struct CheckpointData {
     NeuralNet net;
@@ -21,4 +21,4 @@ void saveCheckpoint(const std::filesystem::path& path, const NeuralNet& net, int
 CheckpointData loadCheckpoint(const std::filesystem::path& path);
 std::string inspectCheckpoint(const std::filesystem::path& path);
 
-} // namespace neural_amp
+} // namespace stock_signal

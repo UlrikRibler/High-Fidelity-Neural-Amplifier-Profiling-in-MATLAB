@@ -4,7 +4,7 @@
 #include <sstream>
 #include <stdexcept>
 
-namespace neural_amp {
+namespace stock_signal {
 namespace {
 
 constexpr int kVersion = 1;
@@ -186,4 +186,4 @@ std::string inspectCheckpoint(const std::filesystem::path& path) {
     return out.str();
 }
 
-} // namespace neural_amp
+} // namespace stock_signal

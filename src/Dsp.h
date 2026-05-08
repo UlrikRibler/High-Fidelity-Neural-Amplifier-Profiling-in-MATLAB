@@ -3,7 +3,7 @@
 #include <random>
 #include <vector>
 
-namespace neural_amp {
+namespace stock_signal {
 
 class Biquad {
 public:
@@ -32,4 +32,4 @@ std::vector<float> randomKnob(int samples, float sampleRate, float speedHz, std:
 void normalizePeak(std::vector<float>& values, float epsilon = 1.0e-6f);
 bool allFinite(const std::vector<float>& values);
 
-} // namespace neural_amp
+} // namespace stock_signal

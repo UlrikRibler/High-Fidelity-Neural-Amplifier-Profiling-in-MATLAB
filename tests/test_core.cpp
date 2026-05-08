@@ -1,19 +1,21 @@
 #include "Artifacts.h"
 #include "Benchmark.h"
+#include "CandleSignal.h"
 #include "Dataset.h"
 #include "Dsp.h"
+#include "MarketSignalProcessor.h"
 #include "Trainer.h"
-#include "VirtualTubeAmp.h"
 
 #include <cassert>
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <random>
 #include <stdexcept>
 
-using namespace neural_amp;
+using namespace stock_signal;
 
 namespace {
 
@@ -46,24 +48,59 @@ void testDatasetShape() {
     cfg.durationSeconds = 0.25f;
     Dataset dataset = generateDataset(cfg);
     require(!dataset.sequences.empty(), "dataset has no sequences");
-    require(dataset.sequences.front().input.rows() == 21, "dataset input should have audio plus 20 band controls");
+    require(dataset.sequences.front().input.rows() == 21, "dataset input should have waveform plus 20 band controls");
     require(dataset.bandCount == 20, "dataset should use 20 sweep bands by default");
     require(dataset.sequences.front().target.size() == dataset.sequences.front().input.cols(),
             "target length mismatch");
 }
 
-void testVirtualAmpFiniteNormalized() {
+void testMarketSignalProcessorFiniteNormalized() {
     const int n = 4096;
     std::vector<float> input(n, 0.1f);
     std::vector<std::vector<float>> bands(20, std::vector<float>(n, 0.5f));
-    const std::vector<float> out = processVirtualTubeAmp(input, bands, 48000);
-    require(out.size() == input.size(), "amp changed output length");
-    require(allFinite(out), "amp produced non-finite output");
+    const std::vector<float> out = processMarketSignal(input, bands, 48000, 0.0f, 20000.0f);
+    require(out.size() == input.size(), "processor changed output length");
+    require(allFinite(out), "processor produced non-finite output");
     float peak = 0.0f;
     for (float value : out) {
         peak = std::max(peak, std::abs(value));
     }
-    require(peak <= 1.0001f, "amp output not normalized");
+    require(peak <= 1.0001f, "processor output not normalized");
+}
+
+void testCandleSignalConversion() {
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "stock_signal_tests";
+    std::filesystem::create_directories(dir);
+    const std::filesystem::path csv = dir / "candles.csv";
+    {
+        std::ofstream out(csv);
+        out << "time,open,high,low,close,volume\n";
+        out << "1,100,103,99,102,1200000\n";
+        out << "2,102,106,101,105,1600000\n";
+        out << "3,105,106,100,101,2100000\n";
+        out << "4,101,104,100,103,1800000\n";
+        out << "5,103,108,102,107,2400000\n";
+    }
+    const std::vector<Candle> candles = loadCandles(csv);
+    require(candles.size() == 5, "candle CSV load count mismatch");
+
+    CandleSignalOptions options;
+    options.sampleRate = 48000;
+    options.secondsPerCandle = 0.01f;
+    options.bandCount = 20;
+    const CandleSignal signal = candlesToSignal(candles, options);
+    require(signal.waveform.size() == signal.processed.size(), "candle signal response length mismatch");
+    require(signal.bandControls.size() == 20, "candle signal band count mismatch");
+    require(allFinite(signal.waveform), "candle waveform has non-finite values");
+    require(allFinite(signal.processed), "candle response has non-finite values");
+
+    Config cfg = makePreset("quick");
+    cfg.sampleRate = options.sampleRate;
+    cfg.chunkSeconds = 0.01f;
+    cfg.hopSeconds = 0.005f;
+    const Dataset dataset = datasetFromCandleSignal(signal, cfg);
+    require(!dataset.sequences.empty(), "candle dataset has no sequences");
+    require(dataset.sequences.front().input.rows() == 21, "candle dataset input channel mismatch");
 }
 
 void testGruForwardDimensions() {
@@ -146,7 +183,7 @@ void testCheckpointRoundTrip() {
     cfg.dense = 3;
     NeuralNet net(cfg, 11);
     net.setNormalization(Eigen::VectorXf::Constant(21, 0.25f), Eigen::VectorXf::Constant(21, 2.0f));
-    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "neural_amp_tests";
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "stock_signal_tests";
     std::filesystem::create_directories(dir);
     const std::filesystem::path path = dir / "checkpoint_epoch_0001.bin";
     saveCheckpoint(path, net, 1, 3);
@@ -162,12 +199,13 @@ int main() {
     testDspFilterStability();
     testKnobRange();
     testDatasetShape();
-    testVirtualAmpFiniteNormalized();
+    testMarketSignalProcessorFiniteNormalized();
+    testCandleSignalConversion();
     testGruForwardDimensions();
     testStreamingPredictionMatchesBatch();
     testBenchmarkRuns();
     testGradientSanity();
     testCheckpointRoundTrip();
-    std::cout << "All neural_amp core tests passed.\n";
+    std::cout << "All stock_signal core tests passed.\n";
     return 0;
 }

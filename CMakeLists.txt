@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(NeuralAmpCpp VERSION 1.0.0 LANGUAGES CXX)
+project(StockSignalDSP VERSION 1.0.0 LANGUAGES CXX)
 
 if(POLICY CMP0169)
   cmake_policy(SET CMP0169 OLD)
@@ -30,32 +30,33 @@ target_include_directories(Eigen3::Eigen INTERFACE ${eigen_SOURCE_DIR})
 
 FetchContent_MakeAvailable(nlohmann_json)
 
-add_library(neural_amp_core
+add_library(stock_signal_core
   src/Artifacts.cpp
   src/Benchmark.cpp
+  src/CandleSignal.cpp
   src/Config.cpp
   src/Dataset.cpp
   src/Dsp.cpp
+  src/MarketSignalProcessor.cpp
   src/Model.cpp
   src/Pipeline.cpp
   src/Trainer.cpp
-  src/VirtualTubeAmp.cpp
 )
 
-target_include_directories(neural_amp_core PUBLIC src)
-target_link_libraries(neural_amp_core PUBLIC Eigen3::Eigen nlohmann_json::nlohmann_json)
+target_include_directories(stock_signal_core PUBLIC src)
+target_link_libraries(stock_signal_core PUBLIC Eigen3::Eigen nlohmann_json::nlohmann_json)
 
 if(MSVC)
-  target_compile_options(neural_amp_core PRIVATE /W4 /permissive-)
+  target_compile_options(stock_signal_core PRIVATE /W4 /permissive-)
 else()
-  target_compile_options(neural_amp_core PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(stock_signal_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-add_executable(neural_amp src/main.cpp)
-target_link_libraries(neural_amp PRIVATE neural_amp_core)
+add_executable(stock_signal src/main.cpp)
+target_link_libraries(stock_signal PRIVATE stock_signal_core)
 
 enable_testing()
 
-add_executable(neural_amp_tests tests/test_core.cpp)
-target_link_libraries(neural_amp_tests PRIVATE neural_amp_core)
-add_test(NAME neural_amp_tests COMMAND neural_amp_tests)
+add_executable(stock_signal_tests tests/test_core.cpp)
+target_link_libraries(stock_signal_tests PRIVATE stock_signal_core)
+add_test(NAME stock_signal_tests COMMAND stock_signal_tests)

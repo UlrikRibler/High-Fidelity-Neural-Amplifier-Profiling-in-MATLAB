@@ -1,17 +1,18 @@
 #include "Pipeline.h"
 
 #include "Artifacts.h"
+#include "CandleSignal.h"
 #include "Dataset.h"
 #include "Trainer.h"
 
 #include <filesystem>
 #include <iostream>
 
-namespace neural_amp {
+namespace stock_signal {
 
 void runPipeline(const Config& cfg, const std::filesystem::path& outputDir) {
     std::filesystem::create_directories(outputDir);
-    std::cout << "Generating dataset (" << cfg.presetName << ")...\n";
+    std::cout << "Generating stock-signal dataset (" << cfg.presetName << ")...\n";
     saveConfig(outputDir / "config.json", cfg);
     Dataset dataset = generateDataset(cfg);
     saveDataset(outputDir, dataset);
@@ -53,4 +54,35 @@ void validateCommand(const std::filesystem::path& modelPath, const std::filesyst
               << validation.accuracyPercent << "%\n";
 }
 
-} // namespace neural_amp
+void candleSignalCommand(const Config& cfg,
+                         const std::filesystem::path& candlePath,
+                         const std::filesystem::path& outputDir,
+                         const std::string& interval,
+                         float secondsPerCandle) {
+    std::filesystem::create_directories(outputDir);
+    saveConfig(outputDir / "config.json", cfg);
+
+    CandleSignalOptions options;
+    options.sampleRate = cfg.sampleRate;
+    options.secondsPerCandle = secondsPerCandle;
+    options.bandCount = cfg.bandCount;
+    options.minBandHz = cfg.minBandHz;
+    options.maxBandHz = cfg.maxBandHz;
+    options.interval = interval;
+    options.seed = cfg.seed;
+
+    std::cout << "Loading chart candles from " << candlePath.string() << "...\n";
+    const std::vector<Candle> candles = loadCandles(candlePath);
+    std::cout << "Converting " << candles.size() << " candles at interval " << interval
+              << " to " << cfg.sampleRate << " Hz signal...\n";
+    const CandleSignal signal = candlesToSignal(candles, options);
+    saveCandleSignalArtifacts(outputDir, signal, options);
+
+    const Dataset dataset = datasetFromCandleSignal(signal, cfg);
+    saveDataset(outputDir, dataset);
+    std::cout << "Candle signal tool artifacts written to " << outputDir.string() << '\n';
+    std::cout << "Input WAV: " << (outputDir / "candle_waveform.wav").string() << '\n';
+    std::cout << "Response WAV: " << (outputDir / "market_signal_response.wav").string() << '\n';
+}
+
+} // namespace stock_signal

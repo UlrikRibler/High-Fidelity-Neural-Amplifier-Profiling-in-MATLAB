@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace neural_amp {
+namespace stock_signal {
 
 struct BenchmarkOptions {
     std::size_t samples = 10000;
@@ -26,4 +26,4 @@ struct BenchmarkResult {
 
 BenchmarkResult benchmarkStreamingInference(const NeuralNet& net, const BenchmarkOptions& options);
 
-} // namespace neural_amp
+} // namespace stock_signal

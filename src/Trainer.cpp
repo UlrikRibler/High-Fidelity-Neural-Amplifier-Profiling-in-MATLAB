@@ -12,7 +12,7 @@
 #include <regex>
 #include <stdexcept>
 
-namespace neural_amp {
+namespace stock_signal {
 
 void computeNormalization(const Dataset& dataset, Eigen::VectorXf& mean, Eigen::VectorXf& stddev) {
     if (dataset.sequences.empty()) {
@@ -166,4 +166,4 @@ ValidationResult validateModel(const NeuralNet& net, const Dataset& dataset) {
     return {esr, (1.0f - esr) * 100.0f};
 }
 
-} // namespace neural_amp
+} // namespace stock_signal

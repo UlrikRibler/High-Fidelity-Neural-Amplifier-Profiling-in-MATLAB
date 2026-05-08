@@ -10,7 +10,7 @@
 #include <stdexcept>
 #include <vector>
 
-namespace neural_amp {
+namespace stock_signal {
 namespace {
 
 double percentile(const std::vector<double>& sortedValues, double p) {
@@ -86,4 +86,4 @@ BenchmarkResult benchmarkStreamingInference(const NeuralNet& net, const Benchmar
     return result;
 }
 
-} // namespace neural_amp
+} // namespace stock_signal

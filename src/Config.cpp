@@ -7,12 +7,31 @@
 #include <sstream>
 #include <stdexcept>
 
-namespace neural_amp {
+namespace stock_signal {
 
 Config makePreset(const std::string& name) {
     if (name == "quick") {
         Config cfg;
         cfg.presetName = "quick";
+        return cfg;
+    }
+    if (name == "candle-analysis") {
+        Config cfg;
+        cfg.presetName = "candle-analysis";
+        cfg.sampleRate = 192000;
+        cfg.durationSeconds = 30.0f;
+        cfg.epochs = 20;
+        cfg.batchSize = 16;
+        cfg.chunkSeconds = 0.25f;
+        cfg.hopSeconds = 0.125f;
+        cfg.hidden1 = 64;
+        cfg.hidden2 = 32;
+        cfg.dense = 24;
+        cfg.bandCount = 20;
+        cfg.minBandHz = 0.0f;
+        cfg.maxBandHz = 20000.0f;
+        cfg.truncationLength = 512;
+        cfg.learningRate = 0.004f;
         return cfg;
     }
     if (name == "gen4-full") {
@@ -28,7 +47,7 @@ Config makePreset(const std::string& name) {
         cfg.hidden2 = 64;
         cfg.dense = 32;
         cfg.bandCount = 20;
-        cfg.minBandHz = 40.0f;
+        cfg.minBandHz = 0.0f;
         cfg.maxBandHz = 20000.0f;
         cfg.truncationLength = 1024;
         cfg.learningRate = 0.005f;
@@ -112,8 +131,8 @@ std::string timestampedSessionName() {
     localtime_r(&t, &tm);
 #endif
     std::ostringstream out;
-    out << "Session_" << std::put_time(&tm, "%Y-%m-%d_%H-%M-%S") << "_CPP";
+    out << "StockSignal_" << std::put_time(&tm, "%Y-%m-%d_%H-%M-%S") << "_CPP";
     return out.str();
 }
 
-} // namespace neural_amp
+} // namespace stock_signal

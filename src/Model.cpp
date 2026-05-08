@@ -4,7 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 
-namespace neural_amp {
+namespace stock_signal {
 namespace {
 
 float xavierLimit(int fanIn, int fanOut) {
@@ -424,4 +424,4 @@ void NeuralNet::adamStep(float learningRate, std::int64_t step) {
     }
 }
 
-} // namespace neural_amp
+} // namespace stock_signal

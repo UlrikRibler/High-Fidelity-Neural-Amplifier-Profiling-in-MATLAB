@@ -1,7 +1,7 @@
 #include "Dataset.h"
 
 #include "Dsp.h"
-#include "VirtualTubeAmp.h"
+#include "MarketSignalProcessor.h"
 
 #include <algorithm>
 #include <fstream>
@@ -10,7 +10,7 @@
 #include <random>
 #include <stdexcept>
 
-namespace neural_amp {
+namespace stock_signal {
 namespace {
 
 constexpr char kDatasetMagic[8] = {'N', 'A', 'D', 'A', 'T', 'A', '0', '2'};
@@ -48,6 +48,27 @@ void readBytes(std::istream& in, void* data, std::size_t size) {
     }
 }
 
+std::vector<float> syntheticMarketWaveform(int totalSamples, int sampleRate, std::mt19937& rng) {
+    std::normal_distribution<float> noise(0.0f, 1.0f);
+    std::bernoulli_distribution jump(0.00035);
+    std::vector<float> out(static_cast<std::size_t>(totalSamples));
+
+    float trend = 0.0f;
+    float volatility = 0.18f;
+    float price = 0.0f;
+    for (int i = 0; i < totalSamples; ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(std::max(sampleRate, 1));
+        trend = 0.9996f * trend + 0.0004f * std::sin(2.0f * 3.14159265358979323846f * 0.21f * t);
+        volatility = std::clamp(0.9992f * volatility + 0.0008f * std::abs(noise(rng)), 0.04f, 1.25f);
+        const float shock = jump(rng) ? noise(rng) * 0.85f : 0.0f;
+        const float marketReturn = trend * 0.018f + volatility * noise(rng) * 0.015f + shock;
+        price = 0.995f * price + marketReturn;
+        out[static_cast<std::size_t>(i)] = price;
+    }
+    normalizePeak(out);
+    return out;
+}
+
 } // namespace
 
 Dataset generateDataset(const Config& cfg) {
@@ -70,13 +91,7 @@ Dataset generateDataset(const Config& cfg) {
     }
 
     std::mt19937 rng(cfg.seed);
-    std::vector<float> audio = logChirp(totalSamples, cfg.sampleRate, cfg.durationSeconds);
-    std::vector<float> noise = pinkNoise(totalSamples, rng);
-    for (int i = 0; i < totalSamples; ++i) {
-        audio[static_cast<std::size_t>(i)] = 0.5f * audio[static_cast<std::size_t>(i)] +
-                                             0.5f * noise[static_cast<std::size_t>(i)];
-    }
-    normalizePeak(audio);
+    std::vector<float> audio = syntheticMarketWaveform(totalSamples, cfg.sampleRate, rng);
 
     std::vector<std::vector<float>> bandControls(static_cast<std::size_t>(dataset.bandCount));
     const float sweepCycles = std::max(1.0f, cfg.durationSeconds / 10.0f);
@@ -96,7 +111,7 @@ Dataset generateDataset(const Config& cfg) {
         }
     }
     std::vector<float> target =
-        processVirtualTubeAmp(audio, bandControls, cfg.sampleRate, cfg.minBandHz, cfg.maxBandHz);
+        processMarketSignal(audio, bandControls, cfg.sampleRate, cfg.minBandHz, cfg.maxBandHz);
 
     const int numChunks = ((totalSamples - dataset.chunkLength) / dataset.hopLength) + 1;
     dataset.sequences.reserve(static_cast<std::size_t>(numChunks));
@@ -220,4 +235,4 @@ Dataset loadDataset(const std::filesystem::path& datasetPath) {
     return dataset;
 }
 
-} // namespace neural_amp
+} // namespace stock_signal

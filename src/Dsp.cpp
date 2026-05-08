@@ -5,7 +5,7 @@
 #include <limits>
 #include <stdexcept>
 
-namespace neural_amp {
+namespace stock_signal {
 namespace {
 
 constexpr float kPi = 3.14159265358979323846f;
@@ -150,4 +150,4 @@ bool allFinite(const std::vector<float>& values) {
     return std::all_of(values.begin(), values.end(), [](float value) { return std::isfinite(value); });
 }
 
-} // namespace neural_amp
+} // namespace stock_signal

@@ -6,7 +6,7 @@
 
 #include <filesystem>
 
-namespace neural_amp {
+namespace stock_signal {
 
 struct TrainingResult {
     NeuralNet net;
@@ -24,4 +24,4 @@ TrainingResult trainModel(const Dataset& dataset, const Config& cfg, const std::
 ValidationResult validateModel(const NeuralNet& net, const Dataset& dataset);
 std::filesystem::path findLatestCheckpoint(const std::filesystem::path& checkpointDir);
 
-} // namespace neural_amp
+} // namespace stock_signal

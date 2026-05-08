@@ -7,7 +7,7 @@
 #include <random>
 #include <vector>
 
-namespace neural_amp {
+namespace stock_signal {
 
 struct CheckpointData;
 
@@ -168,4 +168,4 @@ private:
 
 Eigen::VectorXf sigmoid(const Eigen::VectorXf& x);
 
-} // namespace neural_amp
+} // namespace stock_signal
